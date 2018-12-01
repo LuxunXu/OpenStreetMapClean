@@ -1,7 +1,7 @@
 package edu.ucr.cs.cs226.group2;
 
 import java.io.IOException;
-import java.util.StringTokenizer;
+import java.util.*;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -49,8 +49,9 @@ public class Clean
 
     public static class IntSumReducer
             extends Reducer<Text,IntWritable,Text,IntWritable> {
-        private IntWritable result = new IntWritable();
+        //private IntWritable result = new IntWritable();
 
+        private HashMap<Text, Integer> countMap = new HashMap<>();
         public void reduce(Text key, Iterable<IntWritable> values,
                            Context context
         ) throws IOException, InterruptedException {
@@ -58,8 +59,22 @@ public class Clean
             for (IntWritable val : values) {
                 sum += val.get();
             }
-            result.set(sum);
-            context.write(key, result);
+            countMap.put(new Text(key), sum);
+        }
+
+        @Override
+        protected void cleanup(Context context) throws IOException, InterruptedException{
+            List<Map.Entry<Text, Integer>> list = new LinkedList<>(countMap.entrySet());
+            Collections.sort(list, new Comparator<Map.Entry<Text, Integer>>() {
+                @Override
+                public int compare(Map.Entry<Text, Integer> o1, Map.Entry<Text, Integer> o2) {
+                    return o1.getValue() < o2.getValue() ? 1 : -1;
+                }
+            });
+
+            for (Map.Entry<Text, Integer> l : list) {
+                context.write(l.getKey(), new IntWritable(l.getValue()));
+            }
         }
     }
 
