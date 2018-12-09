@@ -20,7 +20,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-public class Clean
+public class CleanSpecificValue
 {
     public static class TokenizerMapper
             extends Mapper<Object, Text, Text, IntWritable>{
@@ -36,9 +36,15 @@ public class Clean
                 Elements inputs = d.select("tag");
                 for (Element el : inputs) {
                     Attributes attrs = el.attributes();
-                    //String k = "";
+                    String k = "";
                     for (Attribute attr : attrs) {
                         if (attr.getKey().equals("k")) {
+                            word.set(attr.getValue());
+                            context.write(word, one);
+                            k = attr.getValue();
+                            continue;
+                        }
+                        if (k.equals("amenity")) {
                             word.set(attr.getValue());
                             context.write(word, one);
                         }
@@ -82,7 +88,7 @@ public class Clean
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf, "Clean");
-        job.setJarByClass(Clean.class);
+        job.setJarByClass(CleanSpecificValue.class);
         job.setMapperClass(TokenizerMapper.class);
         job.setCombinerClass(IntSumReducer.class);
         job.setReducerClass(IntSumReducer.class);
