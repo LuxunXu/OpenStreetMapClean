@@ -1,27 +1,15 @@
 package edu.ucr.cs.cs226.group2;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Properties;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamReader;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DataOutputBuffer;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.InputSplit;
@@ -42,7 +30,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-public class CleanSpecificValue {
+public class CheckInvalidEnclosureWay {
     public static Properties properties;
     public static Set<Object> propConf;
     //public static Set<String> propSet = new HashSet<String>();
@@ -198,54 +186,35 @@ public class CleanSpecificValue {
                 temp += tokens[i].trim() + " ";
             }
 
-
             Document d = Jsoup.parse(temp);
-            Elements checkValue = d.select("tag");
-            boolean hasValue = false;
-            for (Element el : checkValue) {
+            Elements inputs = d.select(conf.get("xmltag"));
+            for (Element el : inputs) {
                 Attributes attrs = el.attributes();
                 //System.out.print("ELEMENT: " + el.tagName());
                 for (Attribute attr : attrs) {
                     //System.out.print(" " + attr.getKey() + "=" + attr.getValue());
-                    if (attr.getKey().equals("v")) {
-                        if (attr.getValue().equals(conf.get("targetValue"))) {
-                            hasValue = true;
-                        }
+                    if (attr.getKey().equals("id")) {
+                        keyword.set(attr.getValue());
+                    } else {
+                        valueword.set(attr.getKey() + "=\"" + attr.getValue() + "\"");
+                        context.write(keyword, valueword);
                     }
                 }
             }
-            if (hasValue) {
-                Elements inputs = d.select(conf.get("xmltag"));
-                for (Element el : inputs) {
-                    Attributes attrs = el.attributes();
-                    //System.out.print("ELEMENT: " + el.tagName());
-                    for (Attribute attr : attrs) {
-                        //System.out.print(" " + attr.getKey() + "=" + attr.getValue());
-                        if (attr.getKey().equals("id")) {
-                            keyword.set(attr.getValue());
-                        } else {
-                            if (attr.getKey().equals("lon") || attr.getKey().equals("lat")) {
-                                valueword.set(attr.getKey() + "=\"" + attr.getValue() + "\"");
-                                context.write(keyword, valueword);
-                            }
-                        }
-                    }
-                }
-                inputs = d.select("tag");
-                for (Element el : inputs) {
-                    Attributes attrs = el.attributes();
-                    //System.out.print("ELEMENT: " + el.tagName());
-                    String k = "";
-                    String v = "";
-                    for (Attribute attr : attrs) {
-                        //System.out.print(" " + attr.getKey() + "=" + attr.getValue());
-                        if (attr.getKey().equals("k")) {
-                            k = attr.getValue();
-                        } else {
-                            v = attr.getValue();
-                            valueword.set(k + "=\"" + v + "\"");
-                            context.write(keyword, valueword);
-                        }
+            inputs = d.select("tag");
+            for (Element el : inputs) {
+                Attributes attrs = el.attributes();
+                //System.out.print("ELEMENT: " + el.tagName());
+                String k = "";
+                String v = "";
+                for (Attribute attr : attrs) {
+                    //System.out.print(" " + attr.getKey() + "=" + attr.getValue());
+                    if (attr.getKey().equals("k")) {
+                        k = attr.getValue();
+                    } else {
+                        v = attr.getValue();
+                        valueword.set(k + "=\"" + v + "\"");
+                        context.write(keyword, valueword);
                     }
                 }
             }
@@ -268,11 +237,8 @@ public class CleanSpecificValue {
             //Same as word count
             String sum = "";
             for (Text val : values) {
-                String[] tokens = val.toString().split("=");
-                sum += ",\"" + tokens[0] + "\":" + tokens[1];
+                sum += val.toString() + " ";
             }
-            sum = sum.replaceFirst(",", "{");
-            sum += "}";
             Text result = new Text();
             result.set(sum);
             context.write(key, result);
@@ -282,13 +248,12 @@ public class CleanSpecificValue {
     public static void main(String[] args) throws Exception {
         //Define a new configuration file
         Configuration conf = new Configuration();
-        conf.set("xmlinput.start", "<" + args[1]);
-        conf.set("xmlinput.end", "</" + args[1] + ">");
-        conf.set("xmltag", args[1]);
-        conf.set("targetValue", args[2]);
+        conf.set("xmlinput.start", "<way");
+        conf.set("xmlinput.end", "</way>");
+        conf.set("xmltag", "way");
         Job job = Job.getInstance(conf);
 
-        job.setJarByClass(CleanSpecificValue.class);
+        job.setJarByClass(CheckInvalidEnclosureWay.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
         job.setMapperClass(Map.class);
@@ -296,7 +261,7 @@ public class CleanSpecificValue {
         job.setInputFormatClass(XmlInputFormat1.class);
         job.setOutputFormatClass(TextOutputFormat.class);
         FileInputFormat.addInputPath(job, new Path(args[0]));
-        FileOutputFormat.setOutputPath(job, new Path("output_" + args[2]));
+        FileOutputFormat.setOutputPath(job, new Path("outputInvalidWay"));
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 }

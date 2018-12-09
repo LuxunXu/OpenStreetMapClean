@@ -20,7 +20,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-public class CleanSpecificKey
+public class CountSpecificKey
 {
     public static class TokenizerMapper
             extends Mapper<Object, Text, Text, IntWritable>{
@@ -85,8 +85,8 @@ public class CleanSpecificKey
 
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
-        Job job = Job.getInstance(conf, "Clean");
-        job.setJarByClass(CleanSpecificKey.class);
+        Job job = Job.getInstance(conf, "CountTag");
+        job.setJarByClass(CountSpecificKey.class);
         job.setMapperClass(TokenizerMapper.class);
         job.setCombinerClass(IntSumReducer.class);
         job.setReducerClass(IntSumReducer.class);
