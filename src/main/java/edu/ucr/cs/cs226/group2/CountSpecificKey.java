@@ -30,6 +30,7 @@ public class CountSpecificKey
 
         public void map(Object key, Text value, Context context
         ) throws IOException, InterruptedException {
+            Configuration conf = context.getConfiguration();
             String line = value.toString().trim();
             if (line.startsWith("<tag")) {
                 Document d = Jsoup.parse(line);
@@ -42,7 +43,7 @@ public class CountSpecificKey
                             k = attr.getValue();
                             continue;
                         }
-                        if (k.equals("amenity")) {
+                        if (k.equals(conf.get("key"))) {
                             word.set(attr.getValue());
                             context.write(word, one);
                         }
@@ -85,6 +86,7 @@ public class CountSpecificKey
 
     public static void main(String[] args) throws Exception {
         Configuration conf = new Configuration();
+        conf.set("key", args[1]);
         Job job = Job.getInstance(conf, "CountTag");
         job.setJarByClass(CountSpecificKey.class);
         job.setMapperClass(TokenizerMapper.class);
