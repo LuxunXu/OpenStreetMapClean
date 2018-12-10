@@ -1,9 +1,7 @@
 package edu.ucr.cs.cs226.group2;
 
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -30,7 +28,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-public class CheckInvalidEnclosureWay {
+public class CheckInvalidEnclosure {
     public static Properties properties;
     public static Set<Object> propConf;
     //public static Set<String> propSet = new HashSet<String>();
@@ -75,11 +73,12 @@ public class CheckInvalidEnclosureWay {
 
             public boolean nextKeyValue() throws IOException,
                     InterruptedException {
+                int tagIndex = readUntilMatch(this.startTag, false);
                 if ((this.fsin.getPos() < this.end)
-                        && (readUntilMatch(this.startTag, false))) {
+                        && (tagIndex != 0)) {
                     try {
-                        this.buffer.write(this.startTag);
-                        if (readUntilMatch(this.endTag, true)) {
+                        this.buffer.write(tagIndex == 1 ? Arrays.copyOfRange(this.startTag, 0, 9) : Arrays.copyOfRange(this.startTag, 9, 13));
+                        if (readUntilMatch(this.endTag, true) != 0) {
                             this.key.set(this.fsin.getPos());
                             this.value.set(this.buffer.getData(), 0,
                                     this.buffer.getLength());
@@ -114,28 +113,38 @@ public class CheckInvalidEnclosureWay {
                         / (float) (this.end - this.start);
             }
 
-            private boolean readUntilMatch(byte[] match, boolean withinBlock)
-                    throws IOException {
+            private int readUntilMatch(byte[] match, boolean withinBlock) throws IOException {
+                //<relation<way false
+                //</relation></way> true
+                boolean end = withinBlock;
                 int i = 0;
+                int j = end ? 11 : 9;
                 do {
                     int b = this.fsin.read();
                     if (b == -1) {
-                        return false;
+                        return 0;
                     }
                     if (withinBlock) {
                         this.buffer.write(b);
                     }
                     if (b == match[i]) {
                         i++;
-                        if (i >= match.length) {
-                            return true;
+                        if ((i >= 11 && end) || (i >= 9 && !end)) {
+                            return 1;
                         }
                     } else {
                         i = 0;
                     }
-                } while ((withinBlock) || (i != 0)
-                        || (this.fsin.getPos() < this.end));
-                return false;
+                    if (b == match[j]) {
+                        j++;
+                        if ((j >= 17 && end) || (j >= 13 && !end)) {
+                            return 2;
+                        }
+                    } else {
+                        j = end ? 11 : 9;
+                    }
+                } while ((withinBlock) || (i != 0) || (j != 9 && !end) || (j != 11 && end) || (this.fsin.getPos() < this.end));
+                return 0;
             }
         }
     }
@@ -175,12 +184,13 @@ public class CheckInvalidEnclosureWay {
         protected void map(LongWritable key, Text value, Mapper.Context context)
                 throws IOException, InterruptedException {
             String document = value.toString();
+            //System.out.println(document);
             Configuration conf = context.getConfiguration();
 
             String[] tokens = document.split("\\n");
             String temp = "";
             for (int i = 0; i < tokens.length; i++) {
-                if (tokens[i].trim().startsWith("<" + conf.get("xmltag")) && tokens[i].trim().endsWith("/>")) {
+                if ((tokens[i].trim().startsWith("<" + conf.get("xmltag")) || tokens[i].trim().startsWith("<" + conf.get("xmltag2"))) && tokens[i].trim().endsWith("/>")) {
                     continue;
                 }
                 temp += tokens[i].trim() + " ";
@@ -189,34 +199,44 @@ public class CheckInvalidEnclosureWay {
             Document d = Jsoup.parse(temp);
             Elements inputs = d.select(conf.get("xmltag"));
             for (Element el : inputs) {
-                Attributes attrs = el.attributes();
-                //System.out.print("ELEMENT: " + el.tagName());
-                for (Attribute attr : attrs) {
-                    //System.out.print(" " + attr.getKey() + "=" + attr.getValue());
-                    if (attr.getKey().equals("id")) {
-                        keyword.set(attr.getValue());
-                    } else {
-                        valueword.set(attr.getKey() + "=\"" + attr.getValue() + "\"");
-                        context.write(keyword, valueword);
+                keyword.set(conf.get("v") + el.id());
+                Elements children = el.children();
+                boolean needsWrite = false;
+                String member = "";
+                for (Element child : children) {
+                    Attributes attr = child.attributes();
+                    //<tag k="natural" v="water"/>
+                    if (child.tagName().equals("tag") && attr.get("k").equals("natural") && attr.get("v").equals(conf.get("v"))) {
+                        needsWrite = true;
                     }
+                    if (child.tagName().equals("member")) {
+                        if (attr.hasKey("type") && attr.hasKey("ref") && attr.hasKey("role")) {
+                            if (attr.get("type").equals("way")) {
+                                if (attr.get("role").equals("outer")) {
+                                    member += "," + attr.get("ref");
+                                }
+                            }
+                        }
+                    }
+                }
+                if (needsWrite) {
+                    valueword.set(member.substring(1));
+                    context.write(keyword, valueword);
                 }
             }
-            inputs = d.select("tag");
+            inputs = d.select(conf.get("xmltag2"));
             for (Element el : inputs) {
-                Attributes attrs = el.attributes();
-                //System.out.print("ELEMENT: " + el.tagName());
-                String k = "";
-                String v = "";
-                for (Attribute attr : attrs) {
-                    //System.out.print(" " + attr.getKey() + "=" + attr.getValue());
-                    if (attr.getKey().equals("k")) {
-                        k = attr.getValue();
-                    } else {
-                        v = attr.getValue();
-                        valueword.set(k + "=\"" + v + "\"");
-                        context.write(keyword, valueword);
+                keyword.set(el.id());
+                String nds = "";
+                Elements children = el.children();
+                for (Element child : children) {
+                    if (child.tagName().equals("nd")) {
+                        Attributes attr = child.attributes();
+                        nds += "," + attr.get("ref");
                     }
                 }
+                valueword.set(nds.substring(1));
+                context.write(keyword, valueword);
             }
         }
 
@@ -231,29 +251,94 @@ public class CheckInvalidEnclosureWay {
     //Reducer begins //
     public static class Reduce extends
             Reducer<Text, Text, Text, Text> {
+
+        private HashMap<Text, Text> enclosureMap = new HashMap<>();
+        private HashMap<Text, Text> wayMap = new HashMap<>();
+
         public void reduce(Text key, Iterable<Text> values,
                            Reducer<Text, Text, Text, Text>.Context context)
                 throws IOException, InterruptedException {
-            //Same as word count
+            Configuration conf = context.getConfiguration();
             String sum = "";
             for (Text val : values) {
-                sum += val.toString() + " ";
+                sum += val.toString() + ",";
             }
             Text result = new Text();
             result.set(sum);
-            context.write(key, result);
+            if (key.toString().startsWith(conf.get("v"))) {
+                enclosureMap.put(new Text(key), result);
+            } else {
+                wayMap.put(new Text(key), result);
+            }
+        }
+
+        protected void cleanup(Reducer.Context context) throws IOException, InterruptedException{
+            for (Text t : enclosureMap.keySet()) {
+                boolean broken = false;
+                String[] tokens = enclosureMap.get(t).toString().split(",");
+                for (int i = 0; i < tokens.length; i++) {
+                    Text k = new Text(tokens[i]);
+                    if (wayMap.containsKey(k)) {
+                        tokens[i] = wayMap.get(k).toString();
+                    } else {
+                        context.write(t, new Text("Way not found - " + tokens[i]));
+                        broken = true;
+                        break;
+                    }
+                }
+                if (!broken) {
+                    ArrayList<String[]> points = new ArrayList<>();
+                    for (int i = 0; i < tokens.length; i++) {
+                        String[] token = tokens[i].split(",");
+                        points.add(new String[2]);
+                        points.get(i)[0] = token[0];
+                        points.get(i)[1] = token[token.length-1];
+                    }
+                    int tryNumber = 0;
+                    String first = points.get(0)[0];
+                    String last = points.get(0)[1];
+                    points.remove(0);
+                    int tryTotal = points.size();
+                    while ((tryNumber < tryTotal) && points.size() > 0) {
+                        tryNumber++;
+                        for (int i = 0; i < points.size(); i++) {
+                            if (points.get(i)[0].equals(last)) {
+                                last = points.get(i)[1];
+                                points.remove(i);
+                                break;
+                            }
+                            if (points.get(i)[1].equals(first)) {
+                                first = points.get(i)[0];
+                                points.remove(i);
+                                break;
+                            }
+                        }
+                    }
+                    if (!points.isEmpty()) {
+                        String bad = points.get(0)[0] + "," + points.get(0)[1];
+                        context.write(t, new Text("Extra way - " + bad));
+                    } else if (!first.equals(last)) {
+                        context.write(t, new Text("Not enclosed"));
+                    }
+
+                }
+            }
         }
     }
+
 
     public static void main(String[] args) throws Exception {
         //Define a new configuration file
         Configuration conf = new Configuration();
-        conf.set("xmlinput.start", "<way");
-        conf.set("xmlinput.end", "</way>");
-        conf.set("xmltag", "way");
+        //<relation<
+        conf.set("xmlinput.start", "<relation" + "<way");
+        conf.set("xmlinput.end", "</relation" + "></way>");
+        conf.set("xmltag", "relation");
+        conf.set("xmltag2", "way");
+        conf.set("v", args[1]);
         Job job = Job.getInstance(conf);
 
-        job.setJarByClass(CheckInvalidEnclosureWay.class);
+        job.setJarByClass(CheckInvalidEnclosure.class);
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(Text.class);
         job.setMapperClass(Map.class);
@@ -261,7 +346,7 @@ public class CheckInvalidEnclosureWay {
         job.setInputFormatClass(XmlInputFormat1.class);
         job.setOutputFormatClass(TextOutputFormat.class);
         FileInputFormat.addInputPath(job, new Path(args[0]));
-        FileOutputFormat.setOutputPath(job, new Path("outputInvalidWay"));
+        FileOutputFormat.setOutputPath(job, new Path("output2"));
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 }
