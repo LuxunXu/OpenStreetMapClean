@@ -219,7 +219,7 @@ public class CheckInvalidEnclosure {
                         }
                     }
                 }
-                if (needsWrite) {
+                if (needsWrite && !member.isEmpty()) {
                     valueword.set(member.substring(1));
                     context.write(keyword, valueword);
                 }
