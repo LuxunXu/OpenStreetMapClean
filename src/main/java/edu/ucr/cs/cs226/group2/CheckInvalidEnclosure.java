@@ -295,9 +295,16 @@ public class CheckInvalidEnclosure {
                         points.get(i)[1] = token[token.length-1];
                     }
                     int tryNumber = 0;
-                    String first = points.get(0)[0];
+					String first = points.get(0)[0];
                     String last = points.get(0)[1];
-                    points.remove(0);
+					for (int i = 0; i < points.size(); i++) {
+						if (!points.get(i)[0].equals(points.get(i)[1])) {
+							first = points.get(i)[0];
+                    		last = points.get(i)[1];
+							points.remove(i);
+							break;
+						}
+					}
                     int tryTotal = points.size();
                     while ((tryNumber < tryTotal) && points.size() > 0) {
                         tryNumber++;
