@@ -302,6 +302,10 @@ public class CheckInvalidEnclosure {
                     while ((tryNumber < tryTotal) && points.size() > 0) {
                         tryNumber++;
                         for (int i = 0; i < points.size(); i++) {
+			    			if (points.get(i)[0].equals(points.get(i)[1])) {
+                                points.remove(i);
+                                break;
+                            }
                             if (points.get(i)[0].equals(last)) {
                                 last = points.get(i)[1];
                                 points.remove(i);
@@ -315,8 +319,12 @@ public class CheckInvalidEnclosure {
                         }
                     }
                     if (!points.isEmpty()) {
-                        String bad = points.get(0)[0] + "," + points.get(0)[1];
-                        context.write(t, new Text("Extra way - " + bad));
+						for (String[] p : points) {
+							if (!p[0].equals(p[1])) {
+								String bad = p[0] + "," + p[1];
+                        		context.write(t, new Text("Extra way - " + bad));
+							}
+						}
                     } else if (!first.equals(last)) {
                         context.write(t, new Text("Not enclosed"));
                     }
