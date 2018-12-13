@@ -295,8 +295,8 @@ public class CheckInvalidEnclosure {
                         points.get(i)[1] = token[token.length-1];
                     }
                     int tryNumber = 0;
-					String first = points.get(0)[0];
-                    String last = points.get(0)[1];
+					String first = null;
+                    String last = null;
 					for (int i = 0; i < points.size(); i++) {
 						if (!points.get(i)[0].equals(points.get(i)[1])) {
 							first = points.get(i)[0];
@@ -306,36 +306,37 @@ public class CheckInvalidEnclosure {
 						}
 					}
                     int tryTotal = points.size();
-                    while ((tryNumber < tryTotal) && points.size() > 0) {
-                        tryNumber++;
-                        for (int i = 0; i < points.size(); i++) {
-			    			if (points.get(i)[0].equals(points.get(i)[1])) {
-                                points.remove(i);
-                                break;
-                            }
-                            if (points.get(i)[0].equals(last)) {
-                                last = points.get(i)[1];
-                                points.remove(i);
-                                break;
-                            }
-                            if (points.get(i)[1].equals(first)) {
-                                first = points.get(i)[0];
-                                points.remove(i);
-                                break;
-                            }
-                        }
-                    }
-                    if (!points.isEmpty()) {
-						for (String[] p : points) {
-							if (!p[0].equals(p[1])) {
-								String bad = p[0] + "," + p[1];
-                        		context.write(t, new Text("Extra way - " + bad));
+					if (first != null && last != null) {
+						while ((tryNumber < tryTotal) && points.size() > 0) {
+							tryNumber++;
+							for (int i = 0; i < points.size(); i++) {
+								if (points.get(i)[0].equals(points.get(i)[1])) {
+									points.remove(i);
+									break;
+								}
+								if (points.get(i)[0].equals(last)) {
+									last = points.get(i)[1];
+									points.remove(i);
+									break;
+								}
+								if (points.get(i)[1].equals(first)) {
+									first = points.get(i)[0];
+									points.remove(i);
+									break;
+								}
 							}
 						}
-                    } else if (!first.equals(last)) {
-                        context.write(t, new Text("Not enclosed"));
-                    }
-
+						if (!points.isEmpty()) {
+							for (String[] p : points) {
+								if (!p[0].equals(p[1])) {
+									String bad = p[0] + "," + p[1];
+									context.write(t, new Text("Extra way - " + bad));
+								}
+							}
+						} else if (!first.equals(last)) {
+							context.write(t, new Text("Not enclosed"));
+						}
+					}
                 }
             }
         }
